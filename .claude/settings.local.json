@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n \"\\\\\\\\\\\\\\\\u2014\\\\|—\" \"c:/Users/yanagi/antigravity/seminar_script/generate_session01_v3.py\")"
+    ]
+  }
+}

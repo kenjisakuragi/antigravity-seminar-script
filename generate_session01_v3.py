@@ -366,7 +366,7 @@ def build_session01(prs):
 # ═══════════════════════════════════════
 if __name__ == "__main__":
     prs = create_prs()
-    print("第1回「はじめの一歩 — AIと友達になる日」v3を生成中...")
+    print("第1回「はじめの一歩 - AIと友達になる日」v3を生成中...")
     build_session01(prs)
 
     out = os.path.join(SCRIPT_DIR, "講義01_はじめの一歩_v3.pptx")
