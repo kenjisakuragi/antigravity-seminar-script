@@ -1,0 +1,18 @@
+# 生成済みバイナリ（Pythonスクリプトで再生成可能）
+*.docx
+*.pdf
+*.pptx
+
+# スライドダンプ・一時テキスト
+slide_dump.txt
+*.txt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
