@@ -21,6 +21,7 @@ import os, sys, glob, asyncio
 
 try:
     import discord
+    from discord.ext import tasks
 except ImportError:
     print("discord.py が必要です: pip install discord.py"); sys.exit(1)
 try:
@@ -30,6 +31,7 @@ except ImportError:
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import config
+import usage          # API費用の記録・見張り
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 KNOWLEDGE_DIR = os.path.join(HERE, "knowledge")
@@ -99,6 +101,7 @@ def ask_ai(question: str) -> str:
             messages=[{"role": "system", "content": SYSTEM},
                       {"role": "user", "content": question}],
         )
+        usage.record(config.MODEL, getattr(resp, "usage", None))
         text = (resp.choices[0].message.content or "").strip()
         return text or config.ESCALATION
     except openai.RateLimitError:
@@ -144,6 +147,31 @@ async def send_long(channel, text: str):
     while text:
         await channel.send(text[:1900]); text = text[1900:]
 
+async def notify_owner(text: str):
+    """桜木さん（サーバーの持ち主）にDMで知らせる。"""
+    for g in client.guilds:
+        if g.owner is None:
+            continue
+        try:
+            await g.owner.send(text)
+        except Exception as e:
+            print("お知らせDMに失敗:", repr(e)[:160])
+        return
+
+
+@tasks.loop(hours=6)
+async def watch_cost():
+    """API費用を見張る。使いすぎの月だけ、1回だけ知らせる。
+    毎回報告すると、そのうち読まれなくなるので、黙っているのが基本。"""
+    await client.wait_until_ready()
+    try:
+        msg = usage.over_threshold()
+        if msg:
+            await notify_owner(msg)
+    except Exception as e:
+        print("費用の見張りで失敗:", repr(e)[:160])
+
+
 async def forward_dm(message):
     """botに届いたDMを、桜木さん（サーバーの持ち主）に転送する。
     botは答えない。答えると、いちばん拾いたい声をbotが握りつぶすことになる。"""
@@ -183,12 +211,19 @@ async def on_ready():
     if MORNING is None:
         MORNING = morning_mod.setup(client, ask_ai)
         print("おはようチャレンジ：毎朝6:30の投稿を見張ります")
+    if not watch_cost.is_running():
+        watch_cost.start()
+        print("API費用：6時間ごとに見張ります（使いすぎの月だけ知らせます）")
 
 @client.event
 async def on_message(message):
     global KNOWLEDGE, SYSTEM
+    # 管理者コマンド：!cost（かかっているAPI費用）
+    if message.content.strip() == "!cost" and is_admin(message):
+        await message.channel.send(usage.report())
+        return
+
     # 管理者コマンド：!reload
-    if message.content.strip() == "!reload" and is_admin(message):
         KNOWLEDGE = load_knowledge()
         SYSTEM = build_system()
         await message.channel.send(f"知識を読み直しました（{len(KNOWLEDGE)} 文字）✅")

@@ -23,3 +23,4 @@ Thumbs.db
 
 # botの記録（サーバー側にだけ置く。消えると同じ人に二度DMが飛ぶ）
 community/bot/_*state*.json
+community/bot/_usage.json

@@ -69,8 +69,11 @@ chmod +x /usr/local/bin/backup_state.sh
 ( crontab -l 2>/dev/null | grep -v backup_state.sh ; \
   echo "30 3 * * * /usr/local/bin/backup_state.sh" ) | crontab -
 systemctl daemon-reload
-systemctl enable --now rakuraku-bot
-sleep 5
+systemctl enable rakuraku-bot >/dev/null 2>&1
+# ⚠️ enable --now だけだと、すでに動いている時に**新しいコードが読み込まれない**。
+# 入れ直しのために流すことがほとんどなので、必ず restart する
+systemctl restart rakuraku-bot
+sleep 8
 
 echo ""
 echo "========================================"
