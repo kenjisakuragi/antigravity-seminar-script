@@ -16,3 +16,10 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
+
+# secrets
+.env
+**/.env
+
+# botの記録（サーバー側にだけ置く。消えると同じ人に二度DMが飛ぶ）
+community/bot/_*state*.json

@@ -1,0 +1,27 @@
+[Unit]
+Description=らくらくAIキャンパス AIサポートbot（AIさくらぎ）
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rakuraku
+WorkingDirectory=/opt/rakuraku-bot/community/bot
+EnvironmentFile=/opt/rakuraku-bot/.env
+
+# 日本時間で動かす。これが無いと、朝6:30の投稿が日本の15:30に出る
+Environment=TZ=Asia/Tokyo
+# ログをためこまず、すぐ journalctl に出す
+Environment=PYTHONUNBUFFERED=1
+
+ExecStart=/opt/rakuraku-bot/.venv/bin/python ai_support_bot.py
+
+# 落ちても勝手に起き上がる。Discordの一時的な切断でも止まらないように
+Restart=always
+RestartSec=10
+
+# 万一おかしくなっても、サーバー全体を巻き込まないように
+MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target
