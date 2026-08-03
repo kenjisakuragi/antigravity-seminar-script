@@ -23,7 +23,12 @@ import json
 import datetime as dt
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PATH = os.path.join(HERE, "_usage.json")
+# 記録は**コードとは別の場所**に置く。
+# setup.sh は入れ直しのたびにコード一式を消して置き直すので、
+# コードと同じ場所に置くと**記録ごと消える**（実際に消えて、栞が二重投稿された）。
+STATE_DIR = os.environ.get("RAKURAKU_STATE_DIR", HERE)
+os.makedirs(STATE_DIR, exist_ok=True)
+PATH = os.path.join(STATE_DIR, "_usage.json")
 
 JST = dt.timezone(dt.timedelta(hours=9))
 

@@ -24,6 +24,8 @@ id "$USER_NAME" >/dev/null 2>&1 || useradd -m -s /bin/bash "$USER_NAME"
 mkdir -p "$APP"
 
 say "3/6  ファイルを置きます"
+# 記録は別の場所（state/）に置く。ここは絶対に消さない
+mkdir -p "$APP/state"
 if [ -d /root/community ]; then
     rm -rf "$APP/community"
     cp -r /root/community "$APP/community"
@@ -34,6 +36,14 @@ else
     exit 1
 fi
 chown -R "$USER_NAME:$USER_NAME" "$APP"
+# 旧版はコードと同じ場所に記録を置いていた。あれば拾って引っ越す
+for f in _shiori_state.json _morning_state.json _usage.json; do
+    if [ -f "$APP/community/bot/$f" ] && [ ! -f "$APP/state/$f" ]; then
+        mv "$APP/community/bot/$f" "$APP/state/$f"
+        echo "  記録を引っ越しました: $f"
+    fi
+done
+chown -R "$USER_NAME:$USER_NAME" "$APP/state"
 
 say "4/6  Pythonの支度をします"
 [ -d "$APP/.venv" ] || sudo -u "$USER_NAME" python3 -m venv "$APP/.venv"

@@ -31,7 +31,12 @@ import discord
 from discord.ext import tasks
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-STATE_PATH = os.path.join(HERE, "_shiori_state.json")
+# 記録は**コードとは別の場所**に置く。
+# setup.sh は入れ直しのたびにコード一式を消して置き直すので、
+# コードと同じ場所に置くと**記録ごと消える**（実際に消えて、栞が二重投稿された）。
+STATE_DIR = os.environ.get("RAKURAKU_STATE_DIR", HERE)
+os.makedirs(STATE_DIR, exist_ok=True)
+STATE_PATH = os.path.join(STATE_DIR, "_shiori_state.json")
 
 # 時刻は**必ず日本時間**で見る。
 # このPCは日本時間だが、レンタルサーバーはたいてい世界標準時（UTC）で動く。

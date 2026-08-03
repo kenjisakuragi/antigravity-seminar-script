@@ -12,7 +12,7 @@
 #     30 3 * * * /usr/local/bin/backup_state.sh
 set -eu
 
-SRC=/opt/rakuraku-bot/community/bot
+SRC=/opt/rakuraku-bot/state
 DST=/opt/rakuraku-bot/_backup
 KEEP=30                       # 30日ぶん持っておく
 

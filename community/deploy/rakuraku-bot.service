@@ -13,6 +13,10 @@ EnvironmentFile=/opt/rakuraku-bot/.env
 Environment=TZ=Asia/Tokyo
 # ログをためこまず、すぐ journalctl に出す
 Environment=PYTHONUNBUFFERED=1
+# 記録の置き場所。**コードとは別**にする。
+# setup.sh は入れ直しのたびにコード一式を消して置き直すので、
+# ここを分けておかないと記録ごと消える（実際に消えて、栞が二重投稿された）
+Environment=RAKURAKU_STATE_DIR=/opt/rakuraku-bot/state
 
 ExecStart=/opt/rakuraku-bot/.venv/bin/python ai_support_bot.py
 
