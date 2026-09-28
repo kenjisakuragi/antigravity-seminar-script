@@ -149,3 +149,70 @@ def over_threshold() -> str | None:
         f"抑えたい場合は、モデルを `gpt-5.4-nano` に下げる手があります（費用は約1/4）。\n"
         f"`!cost` で、いつでも内訳を見られます。"
     )
+
+
+# ────────────────────────────────────────────────
+# 1日の上限（2026-09-27 追加）
+#
+# なぜ足したか
+#   それまでの見張りは「月の見込みが $20 を超えたらDMする」だけだった。
+#   問題が2つあった。
+#     ① 知らせるだけで、**止めない**。DMが届くころには使い終わっている
+#     ② 判定が月単位なので、1日で暴走しても月の見込みが超えるまで気づかない
+#   実績は9月で月92円（1日4.2円）。$20 はその33倍で、見張りとして働いていなかった。
+#
+#   なので「その日ぶんを使い切ったら、もう呼ばない」という硬い止め方を入れる。
+#   上限は環境変数で変えられる。既定は1日100円（実績の約24倍＝十分な余裕）。
+# ────────────────────────────────────────────────
+
+DAILY_LIMIT_JPY = float(os.environ.get("RAKURAKU_DAILY_LIMIT_JPY", "100"))
+DAILY_LIMIT_USD = DAILY_LIMIT_JPY / USD_JPY
+
+
+def today_cost() -> float:
+    """今日ぶんの概算（ドル）。"""
+    d = _load()
+    key = dt.datetime.now(JST).date().isoformat()
+    row = d["days"].get(key)
+    return _cost(row) if row else 0.0
+
+
+def over_daily_limit() -> bool:
+    """今日ぶんを使い切ったか。ask_ai はこれを見て、呼ぶ前に引き返す。"""
+    return today_cost() >= DAILY_LIMIT_USD
+
+
+def daily_alert() -> str | None:
+    """上限に達した日、**1日1回だけ**知らせる文面を返す。
+
+    over_threshold（月）とは別枠。こちらは「もう止めました」の報告なので、
+    黙っていると桜木さんが気づけない。だが何度も言うと読まれなくなる。
+    """
+    if not over_daily_limit():
+        return None
+    d = _load()
+    key = dt.datetime.now(JST).date().isoformat()
+    if d.get("alerted_day") == key:
+        return None                      # 今日はもう言った
+    d["alerted_day"] = key
+    _save(d)
+    c = today_cost()
+    return (
+        f"🛑 **AIさくらぎを、今日はここで止めました**\n\n"
+        f"今日ぶん：約{c * USD_JPY:,.0f}円（${c:.2f}）\n"
+        f"1日の上限：約{DAILY_LIMIT_JPY:,.0f}円\n\n"
+        f"質問には「明日また聞いてくださいね」とお返ししています。\n"
+        f"日付が変わればひとりでに戻ります。**何もしなくて大丈夫です**。\n\n"
+        f"急いで上げたいときは、サーバーの `RAKURAKU_DAILY_LIMIT_JPY` を\n"
+        f"書き換えて入れ直してください。`!cost` で内訳が見られます。"
+    )
+
+
+# 上限に達した日に、受講生へお返しする文面。
+# ここで会話を終わらせず、**人にパスする**のが大事。
+# 「もう答えません」で切ると、聞きにくい空気がそのまま残る。
+DAILY_LIMIT_REPLY = (
+    "申し訳ありません。今日はここまでにさせてください🙏\n"
+    "日付が変わりましたら、また聞いてくださいね🌸\n\n"
+    "お急ぎのときは、そのままチャンネルに書いてください。桜木が直接お答えします。"
+)

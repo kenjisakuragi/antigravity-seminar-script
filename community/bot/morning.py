@@ -9,15 +9,15 @@ morning.py — 「おはようチャレンジ」の朝の担当。
 ⚠️ 2の応え方を、わざと分けてある（理由は下）
 
   - **全員に、スタンプ（リアクション）**。これは必ず付く
-  - **言葉で返すのは、一部の方だけ**
-      ・その日、いちばん最初に書いた方（部屋の口火を切ってくれた人）
-      ・ひとこと添えて書いた方（20字以上＝「おはよう」だけではない人）
+  - **言葉では返さない**（2026/8/4 変更）
 
-なぜ全員に言葉を返さないか
-  30人が「おはようございます」と書く部屋で、botが30回返事をすると、
-  **人の会話が埋まる**。受講生どうしが「〇〇さんおはよう」と言い合う余白が消える。
+なぜ言葉で返さないか（2026/8/4・桜木さん指定）
+  ここは**あいさつを交わす部屋**であって、質問の部屋ではない。
+  botが返事をすると、受講生どうしが「〇〇さんおはよう」と言い合う余白が消える。
   スタンプなら「見てるよ」は伝わるし、じゃまにならない。
   ここはbotが主役の部屋ではない。
+
+  ※ 質問されたときは、@メンションすれば今までどおり答える。
 
 守ること（栞と同じ）
   - 「◯日連続ですね」「久しぶりですね」と**言わない**。数えていることを見せない
@@ -258,27 +258,11 @@ class Morning:
         except Exception:
             pass
 
-        text = (message.content or "").strip()
+        # 言葉では返さない。スタンプだけ（上の「なぜ」を参照）
         first = self.state.get("first_of_day") != today
         if first:
             self.state["first_of_day"] = today
             save_state(self.state)
-
-        # 言葉を返すのは、口火を切った方と、ひとこと添えてくれた方だけ
-        if not first and len(text) < REPLY_MIN_LEN:
-            return
-        if not text:
-            return
-
-        reply = None
-        try:
-            reply = await asyncio.to_thread(
-                self.ask_ai, REPLY_PROMPT.format(text=text[:400]))
-        except Exception as e:
-            print("おはようの返事づくりに失敗:", repr(e)[:160])
-        if not reply or len(reply) > 120 or "自動応答です" in reply:
-            return          # 失敗したら黙る。スタンプは付いているので、それで足りる
-        await message.reply(reply, mention_author=False)
 
 
 def setup(client, ask_ai, guild_id=None) -> Morning:

@@ -7,7 +7,8 @@ shiori.py — 特典③「今週の栞」の、Discord側の運用を自動化�
 
 やること（3つだけ）
   1. 毎週月曜の朝、栞チャンネルに「今週の一行、どうぞ」の投稿をする
-  2. 書いてくださった方に、**必ず**ひとこと返す（ChatGPTで短く。失敗したら定型文）
+  2. 書いてくださった方に、ひとこと返す。ただし**30分待ち、誰も反応していないときだけ**
+     （講師や仲間が先に反応していたら、botは黙る。特典③は「認定講師が並んで歩く」ため）
   3. 2週つづけて書いていない方にだけ、そっとDMを1通。**それ以上は追いかけない**
 
 ⚠️ ここは運用のルールが厳しい。コードを変える前に、下の「守ること」を読むこと。
@@ -54,8 +55,23 @@ def today_jst() -> dt.date:
 
 # ===== 設定 =====
 
+# ⚠️ pace.py（ペースメーカー）が動いているときは、月曜の投稿と
+#    「そっとDM」を pace 側に譲る。両方動くと——
+#      ・月曜7時に、栞チャンネルへ**2回**投稿される
+#      ・2週サイレントの方に、pace の週次DMと栞のそっとDMが**2通**届く
+#    どちらも実害が大きいので、pace.setup() から True にしてもらう。
+PACE_ACTIVE = False
+REPLY_HOOK = None        # pace.setup() が build_reply を差し込む
+
 CHANNEL_KEYS = ["今週の栞", "栞"]        # チャンネル名の部分一致
-TARGET_ROLES = ["1期生", "2期生"]        # 沈黙チェックの対象（このロールを持つ人だけ）
+TARGET_ROLES = ["受講生", "1期生", "2期生"]   # 沈黙チェックの対象（このロールを持つ人だけ）
+
+# ⚠️ 栞で返事をするのは、**受講生タグを持つ方だけ**（2026-08-23・桜木さんのご指示）。
+#    運営・スタッフ・桜木さんご自身の書き込みに、AIが返すと——
+#      ・受講生から見て「先生がAIに返されている」ように見える
+#      ・チャンネルが、身内の会話で埋まる
+#    どちらも、書きにくさに直結します。
+REPLY_ROLES = ["受講生"]                # この**どれか**を持つ方にだけ、返事をする
 EXCLUDE_ROLES = ["運営", "認定講師"]      # 運営側はDMの対象外
 
 POST_WEEKDAY = 0        # 0=月曜
@@ -136,6 +152,20 @@ def weeks_between(a: str, b: str) -> int:
 
 # ===== 本体 =====
 
+def is_student(member) -> bool:
+    """受講生タグを持つ方かどうか。
+
+    ⚠️ DMを送る相手ではなく、**栞で返事をする相手**の判定に使う。
+    　 ロールが取れない相手（DM経由など）は、安全側に倒して False。
+    """
+    roles = [r.name for r in getattr(member, "roles", [])]
+    if not roles:
+        return False
+    if any(r in EXCLUDE_ROLES for r in roles):
+        return False
+    return any(r in REPLY_ROLES for r in roles)
+
+
 class Shiori:
     def __init__(self, client, ask_ai, guild_id=None):
         self.client = client
@@ -170,9 +200,14 @@ class Shiori:
         save_state(self.state)
         print(f"栞：月曜の投稿をしました（{iso_week(today)}）")
 
-    # ---- ② 書いてくれた人に返す ----
+    # ---- ② 書いてくれた人に返す（待ってから） ----
     async def on_entry(self, message):
-        """栞チャンネルへの書き込みを受け取る。必ず1件返す。"""
+        """栞チャンネルへの書き込みを受け取る。
+        記録だけは**すぐ**つける（2週サイレントの判定に使うので、遅らせない）。
+        返事は waiting.maybe_answer_later 経由で、30分待ってから。"""
+        if not is_student(message.author):
+            return                       # 運営・スタッフ・桜木さんには反応しない
+
         uid = str(message.author.id)
         self.state["last_entry"][uid] = iso_week(today_jst())
         save_state(self.state)
@@ -180,17 +215,36 @@ class Shiori:
         text = (message.content or "").strip()
         if not text:
             return
+
+        import waiting
+        import config as cfg
+        import asyncio as aio
+        aio.create_task(waiting.maybe_answer_later(
+            self.client, message, cfg.WAIT_MIN_SHIORI, self._reply))
+
+    async def _reply(self, message):
+        """誰も反応しなかったときだけ、そっと返す。
+
+        ⚠️ pace（ペースメーカー）が動いているときは、そちらに作らせる。
+        　 pace はその方の**これまでの書き込み**と**いまの週**を持っているので、
+        　 「受け止めるだけ」ではなく「次の一歩」まで添えられる。
+        　 pace が無い／失敗したときだけ、これまでどおりの受け止めだけの返事に落ちる。
+        """
+        text = (message.content or "").strip()
         reply = None
         try:
             import asyncio
             async with message.channel.typing():
-                reply = await asyncio.to_thread(
-                    self.ask_ai, REPLY_PROMPT.format(text=text[:500]))
+                if PACE_ACTIVE and REPLY_HOOK is not None:
+                    reply = await REPLY_HOOK(message)
+                else:
+                    reply = await asyncio.to_thread(
+                        self.ask_ai, REPLY_PROMPT.format(text=text[:500]))
         except Exception as e:
             print("栞の返事づくりに失敗:", repr(e)[:200])
         # AIが長文やエスカレーション文を返した時は、定型に落とす。
         # ここは「短くあたたかく」が絶対条件なので、長い返事は事故と見なす。
-        if not reply or len(reply) > 160 or "自動応答です" in reply:
+        if not reply or len(reply) > 420 or "自動応答です" in reply:
             reply = random.choice(FALLBACK_REPLIES)
         await message.reply(reply, mention_author=False)
 
@@ -264,6 +318,10 @@ def setup(client, ask_ai, guild_id=None) -> Shiori:
         # PCが寝ていて7時を逃しても、月曜のうちに開けば、その週ぶんを出す。
         # 火曜以降には持ち越さない（「今週の栞」なので、週の頭に出ないと意味がうすい）
         if now.hour >= CATCHUP_UNTIL:
+            return
+        if PACE_ACTIVE:
+            # 月曜の投稿・DMは pace が受け持つ。ここでは何もしない。
+            # （書き込みへの返事だけは、これまでどおり栞が担当する）
             return
         await sh.post_monday(today)
         await sh.send_quiet_dms(today)
